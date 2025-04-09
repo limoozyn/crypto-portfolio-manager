@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getTopCryptocurrencies, Cryptocurrency } from '@/services/cryptoService';
 import CryptoCard from '@/components/CryptoCard';
@@ -15,14 +15,30 @@ export default function CryptoList({ initialCryptos }: CryptoListProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('rank');
   const [page, setPage] = useState(1);
+  const [allCryptos, setAllCryptos] = useState<Cryptocurrency[]>(initialCryptos);
   
-  const { data: cryptos = initialCryptos, isLoading, isError } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['cryptocurrencies', page],
     queryFn: () => getTopCryptocurrencies(page, 20),
-    initialData: initialCryptos,
-    placeholderData: (previousData) => previousData,
+    initialData: page === 1 ? initialCryptos : undefined,
   });
-
+  
+  useEffect(() => {
+    if (data) {
+      if (page === 1) {
+        setAllCryptos(data);
+      } else {
+        const newCryptos = [...allCryptos];
+        data.forEach(crypto => {
+          if (!newCryptos.some(c => c.id === crypto.id)) {
+            newCryptos.push(crypto);
+          }
+        });
+        setAllCryptos(newCryptos);
+      }
+    }
+  }, [data, page]);
+  
   const sortCryptos = (cryptoList: Cryptocurrency[]) => {
     if (!cryptoList) return [];
     
@@ -53,13 +69,13 @@ export default function CryptoList({ initialCryptos }: CryptoListProps) {
     );
   };
   
-  const sortedAndFilteredCryptos = sortCryptos(filterCryptos(cryptos || []));
+  const sortedAndFilteredCryptos = sortCryptos(filterCryptos(allCryptos));
   
   const loadMore = () => {
     setPage(prevPage => prevPage + 1);
   };
   
-  const showLoadMore = !searchTerm && sortedAndFilteredCryptos.length >= 20;
+  const showLoadMore = !searchTerm && !isLoading && allCryptos.length >= page * 20;
   
   return (
     <>
@@ -99,7 +115,7 @@ export default function CryptoList({ initialCryptos }: CryptoListProps) {
         </div>
       </div>
       
-      {isLoading && !cryptos && (
+      {isLoading && page === 1 && (
         <div className="flex justify-center items-center py-20">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
         </div>
@@ -128,9 +144,17 @@ export default function CryptoList({ initialCryptos }: CryptoListProps) {
         <div className="flex justify-center mt-8">
           <button
             onClick={loadMore}
-            className="px-6 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors duration-300"
+            className="px-6 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg transition-colors duration-300 flex items-center"
+            disabled={isLoading}
           >
-            Load More
+            {isLoading && page > 1 ? (
+              <>
+                <span className="animate-spin h-4 w-4 mr-2 border-b-2 border-white rounded-full"></span>
+                Loading...
+              </>
+            ) : (
+              'Load More'
+            )}
           </button>
         </div>
       )}
